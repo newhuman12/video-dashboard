@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تعديل الفيديوهات</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+  <style>
+    body {
+      background-color: #f7f9fc;
+      padding: 30px;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .video-card {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    iframe, video {
+      width: 100%;
+      height: 200px;
+      border: none;
+    }
+    .action-buttons {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    .form-select, .form-control {
+      margin-bottom: 15px;
+    }
+    .popout-btn {
+      margin-top: 10px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3>تعديل الفيديوهات</h3>
+      <a href="index.html" class="btn btn-secondary">الذهاب إلى إضافة فيديو جديد</a>
+    </div>
+
+    <select id="deptSelect" class="form-select" onchange="renderFilteredVideos()">
+      <option value="">-- اختر القسم --</option>
+    </select>
+
+    <input type="text" id="searchInput" class="form-control" placeholder="ابحث بعنوان أو وصف الفيديو..." oninput="renderFilteredVideos()">
+
+    <div class="form-check mb-3">
+      <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll(this)">
+      <label for="selectAll" class="form-check-label">تحديد الكل</label>
+    </div>
+
+    <button class="btn btn-danger mb-4" onclick="confirmDeleteSelectedVideos()">حذف المحدد</button>
+
+    <div id="videoContainer" class="video-grid"></div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editModalLabel">تعديل الفيديو</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="editIndex">
+            <div class="mb-3">
+              <label class="form-label">العنوان</label>
+              <input type="text" class="form-control" id="editTitle">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">الوصف</label>
+              <textarea class="form-control" id="editDescription" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">الرابط</label>
+              <input type="url" class="form-control" id="editLink">
+              <button class="btn btn-sm btn-info mt-2" onclick="openInPopup(document.getElementById('editLink').value)">انقر لعرض الفيديو</button>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">القسم</label>
+              <select class="form-select" id="editDepartment"></select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            <button type="button" class="btn btn-primary" onclick="saveEdit()">حفظ التعديلات</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const videos = JSON.parse(localStorage.getItem('videos') || '[]');
+const container = document.getElementById('videoContainer');
+const deptSelect = document.getElementById('deptSelect');
+const editDeptSelect = document.getElementById('editDepartment');
+
+function populateDepartments() {
+  const deptMap = {};
+  videos.forEach(v => {
+    deptMap[v.department] = (deptMap[v.department] || 0) + 1;
+  });
+  deptSelect.innerHTML = '<option value="">-- اختر القسم --</option>';
+  editDeptSelect.innerHTML = '';
+  Object.entries(deptMap).forEach(([dept, count]) => {
+    const option = document.createElement('option');
+    option.value = dept;
+    option.textContent = `${dept} (${count})`;
+    deptSelect.appendChild(option);
+    const editOption = document.createElement('option');
+    editOption.value = dept;
+    editOption.textContent = dept;
+    editDeptSelect.appendChild(editOption);
+  });
+}
+
+function renderFilteredVideos() {
+  const dept = deptSelect.value;
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+  container.innerHTML = '';
+  const filtered = videos.map((v, i) => ({...v, index: i}))
+    .filter(v => (!dept || v.department === dept) &&
+                (v.title.toLowerCase().includes(searchTerm) ||
+                 v.description.toLowerCase().includes(searchTerm)));
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="alert alert-info text-center">لا توجد فيديوهات مطابقة.</div>';
+    return;
+  }
+
+  filtered.forEach(video => {
+    container.innerHTML += `
+      <div class="video-card">
+        <div class="form-check mb-2">
+          <input type="checkbox" class="form-check-input" data-index="${video.index}">
+        </div>
+        <h5>${video.title}</h5>
+        <p>${video.description}</p>
+        <video src="${video.link}" controls></video>
+        <button class="btn btn-sm btn-info mt-2" onclick="openInPopup('${video.link}')">انقر لعرض الفيديو</button>
+        <div class="action-buttons">
+          <button class="btn btn-warning btn-sm" onclick="editVideo(${video.index})">تعديل</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteVideo(${video.index})">حذف</button>
+        </div>
+      </div>`;
+  });
+}
+
+function editVideo(index) {
+  const video = videos[index];
+  document.getElementById('editIndex').value = index;
+  document.getElementById('editTitle').value = video.title;
+  document.getElementById('editDescription').value = video.description;
+  document.getElementById('editLink').value = video.link;
+  document.getElementById('editDepartment').value = video.department;
+  const modal = new bootstrap.Modal(document.getElementById('editModal'));
+  modal.show();
+}
+
+function saveEdit() {
+  const index = document.getElementById('editIndex').value;
+  videos[index].title = document.getElementById('editTitle').value;
+  videos[index].description = document.getElementById('editDescription').value;
+  videos[index].link = document.getElementById('editLink').value;
+  videos[index].department = document.getElementById('editDepartment').value;
+  localStorage.setItem('videos', JSON.stringify(videos));
+  populateDepartments();
+  renderFilteredVideos();
+  const modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+  modal.hide();
+}
+
+function deleteVideo(index) {
+  if (confirm('هل أنت متأكد أنك تريد حذف هذا الفيديو؟')) {
+    videos.splice(index, 1);
+    localStorage.setItem('videos', JSON.stringify(videos));
+    populateDepartments();
+    renderFilteredVideos();
+  }
+}
+
+function toggleSelectAll(source) {
+  document.querySelectorAll('#videoContainer input[type="checkbox"]').forEach(cb => cb.checked = source.checked);
+}
+
+function confirmDeleteSelectedVideos() {
+  if (!confirm('هل أنت متأكد من حذف جميع الفيديوهات المحددة؟')) return;
+  const selected = [...document.querySelectorAll('#videoContainer input[type="checkbox"]:checked')]
+    .map(cb => parseInt(cb.getAttribute('data-index')));
+  const remaining = videos.filter((_, i) => !selected.includes(i));
+  localStorage.setItem('videos', JSON.stringify(remaining));
+  location.reload();
+}
+
+function openInPopup(link) {
+  window.open(link, '_blank', 'width=800,height=600');
+}
+
+populateDepartments();
+renderFilteredVideos();
+</script>
+</body>
+</html>
